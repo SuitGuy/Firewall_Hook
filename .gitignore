@@ -1,6 +1,10 @@
-#Temporary files
+#C Kernel files
 *~
-
+*.cmd
+*.symvers
+*.order
+*.mod.c
+*.tmp_versions*
 # Object files
 *.o
 *.ko

@@ -4,7 +4,7 @@ KERNELDIR=/lib/modules/`uname -r`/build
 
 MODULES = firewallExtension.ko 
  
-obj-m += firewallExtension.o findExecutable.o
+obj-m += firewallExtension.o 
 firewallExtension-y := klist.o firewall.o
 
 firewallExtension.ko: firewall.c klist.h
