@@ -13,6 +13,15 @@ int exists(char * filepath){
 	}
 }
 
+int is_port(int port){
+	if(port > 0 && port < 65535){
+		return 1;
+	} else {
+		return 0;
+	}
+
+} 
+
 int executable(char * filepath){
 	if( access( filepath, X_OK ) != -1 ) {
 		return 1;
@@ -24,29 +33,31 @@ int executable(char * filepath){
 int readFile(char * filePath)
 {
 	FILE * fp;
-	int res;
-	int curport;
-	char  *filepath;
+	int res;	
 	fp = fopen (filePath, "r");
-
-	res = fscanf(fp, "%i %ms", &curport, &filepath);
-   	while ( res == 2){
-		printf("port: %i Path: %s\n", curport, filepath);
-		if(executable(filepath)){
-			printf("EXECUTABLE\n");
-		}else{
-			printf("NOTEXECUTABLE\n");
-		}
-		res = fscanf(fp, "%i %ms", &curport, &filepath); 
-	}
+	char line[BUFFERSIZE];
 	
-	if(res != EOF){
-		fprintf(stderr,"ERROR:\n   mallformed file supplied. file should be in the form <port> <filename>\n");
-		exit(1);
+   	while ( fgets(line, BUFFERSIZE, fp)){
+		
+		int curport;
+		char  *filepath;
+		res = sscanf(line, "%i %ms", &curport, &filepath);
+		memset(line, 0, BUFFERSIZE);
+		if(res != 2){
+			fprintf(stderr, "ERROR: Ill-formed file\n");
+			exit(1);
+		}
+		printf("port: %i Path: %s\n", curport, filepath);
+
+	
+		if(!is_port(curport)){
+			fprintf(stderr,"Not valid port\n");
+		}		
+		
+		if(!executable(filepath)){
+			fprintf(stderr,"ERROR: Cannot execute file\n");
+		}
 	}
-
-   
-
 	fclose(fp);
    
 	return 0;
