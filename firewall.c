@@ -61,10 +61,10 @@ struct nf_hook_ops *reg;
 */
 
 
-int getProgramName(char * name, size_t size){ 
+char *getProgramName(char * name, size_t size){ 
 	struct path path;
+	char * retPos;
     pid_t mod_pid;
-    struct dentry *procDentry;
  	char cmdlineFile[256];
     int res;
 
@@ -74,15 +74,11 @@ int getProgramName(char * name, size_t size){
     mod_pid = current->pid;
     snprintf (cmdlineFile, 256, "/proc/%d/exe", mod_pid); 
     res = kern_path (cmdlineFile, LOOKUP_FOLLOW, &path);
-    if (res) {
-		return -EFAULT;
-    }
-	procDentry = path.dentry;
 
-	name = d_path(&path, name, size);
+	retPos = d_path(&path, name, size);
 	printk(KERN_INFO "*name after d_path %p\n", name);
 	printk (KERN_INFO "path to binary = '%s'\n", name);
-    return 0;
+    return retPos;
 }
 
 
@@ -104,7 +100,7 @@ unsigned int FirewallExtensionHook (const struct nf_hook_ops *ops,
 	struct tcphdr _tcph;
 	struct sock *sk;
 	char *procName;
-
+	char *procNamePos;
 	
 
 	sk = skb->sk;
@@ -146,12 +142,12 @@ unsigned int FirewallExtensionHook (const struct nf_hook_ops *ops,
 		return NF_ACCEPT;
 	}
 	procName = kmalloc(256, GFP_KERNEL);
-	printk(KERN_INFO "*procName before call %p\n", procName);
-	getProgramName(procName, 256);
-	printk(KERN_INFO "*procName after call %p\n", procName);
-	if(contains(rules,ntohs (tcp->dest),procName,256) == TRUE){
+	
+	procNamePos = getProgramName(procName, 256);
+	
+	if(contains(rules,ntohs (tcp->dest),procNamePos,256) == TRUE){
 		printk(KERN_INFO "WIN");
-		printk(KERN_INFO "the proccess sending this packet is : %s\n", procName);
+		printk(KERN_INFO "the proccess sending this packet is : %s\n", procNamePos);
 	    tcp_done (sk); /* terminate connection immediately */
 	    printk (KERN_INFO "Connection shut down\n");
 		kfree(procName);
