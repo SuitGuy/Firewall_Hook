@@ -5,6 +5,35 @@
 
 #define BUFFERSIZE 1024
 
+int sendFile(char * filepath){
+	FILE *fp = fopen(filepath, "r");
+	char * content = NULL;
+	if(fp != NULL){
+		if(fseek(fp, 0L, SEEK_END) == 0){
+			long filesize = ftell(fp);
+			if(filesize != -1){
+				content = malloc(sizeof(char) * (filesize +1));
+			}
+			if(fseek(fp, 0L, SEEK_SET) == 0){
+			size_t readlen = fread(content, sizeof(char), filesize, fp);			
+				if(readlen > 0){
+					content[++readlen] = '\0';
+				}
+			}	
+		}
+
+			
+	}else {
+		fprintf(stderr, "ERROR: could not read file\n");
+		fclose(fp);
+		return -1;
+	}
+
+	printf("FILE CONTENT: %s\n", content);
+	fclose(fp);
+	return 0;
+}
+
 int exists(char * filepath){
 	if( access( filepath, F_OK ) != -1 ) {
 		return 1;
@@ -49,10 +78,11 @@ int readFile(char * filePath)
 		}
 		printf("port: %i Path: %s\n", curport, filepath);
 
-	
 		if(!is_port(curport)){
-			fprintf(stderr,"Not valid port\n");
-		}		
+			fprintf(stderr,"Not valid port number '%i'\n", curport);
+			fprintf(stderr, "ERROR: Ill-formed file\n");
+			exit(1);
+		}
 		
 		if(!executable(filepath)){
 			fprintf(stderr,"ERROR: Cannot execute file\n");
@@ -74,10 +104,11 @@ int main (int argc, char **argv) {
 		strncpy(filepath, argv[2], BUFFERSIZE -1);
 		filepath[BUFFERSIZE -1] = '\0';
 		if(!exists(filepath)){
-			fprintf(stderr, "file '%s' DOES NOT EXIST\n", filepath);
+			fprintf(stderr, "file '%s' Rule file does not exist\n", filepath);
 			exit(1);
 		}
 		readFile(filepath);
+		sendFile(filepath);
 	
 	
 	}else {
