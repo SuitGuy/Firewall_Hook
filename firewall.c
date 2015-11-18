@@ -83,9 +83,9 @@ char *getProgramName(char * name, size_t size){
 
 
 const struct file_operations File_Ops_4_Our_Proc_File = {
-    .owner = THIS_MODULE,
-//    .write 	 = addRules,
-//    .open 	 = procfs_open,
+//    .owner = THIS_MODULE,
+//    .write = addRules,
+//    .open = procfs_open,
 //    .release = procfs_close,
 };
 

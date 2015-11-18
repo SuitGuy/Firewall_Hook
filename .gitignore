@@ -5,6 +5,8 @@
 *.order
 *.mod.c
 *.tmp_versions*
+firewallSetup
+
 # Object files
 *.o
 *.ko
