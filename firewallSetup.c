@@ -32,7 +32,6 @@ int sendFile(char * filepath){
 	char * msg = malloc(sizeof(char) * (filesize +3));
 	strcat(msg, "W ");
 	strcat(msg, content);
-	printf("FILE CONTENT:\n%s\n", msg);
 
 
 	FILE * procfp;
@@ -130,7 +129,7 @@ int main (int argc, char **argv) {
 		strncpy(filepath, argv[2], BUFFERSIZE -1);
 		filepath[BUFFERSIZE -1] = '\0';
 		if(!exists(filepath)){
-			fprintf(stderr, "file '%s' Rule file does not exist\n", filepath);
+			fprintf(stderr, "ERROR: \n     file '%s' does not exist\n", filepath);
 			exit(1);
 		}
 		readFile(filepath);

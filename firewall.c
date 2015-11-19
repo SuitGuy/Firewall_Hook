@@ -12,6 +12,7 @@
 #include <linux/dcache.h>
 #include <linux/string.h>
 #include <linux/rwsem.h>
+
 DEFINE_MUTEX  (devLock);
 Klist * firewallRules;
 #define FALSE 0
@@ -53,6 +54,7 @@ char *getProgramName(char * name, size_t size){
 }
 
 static int procfs_open(struct inode *inode, struct file *file){
+	//make sure that only one programe at a time can write to the proc file
 	mutex_lock (&devLock);
 	if(proc_sem > 0){
 		mutex_unlock(&devLock);
@@ -91,15 +93,14 @@ ssize_t fire_write( struct file *filp, const char __user *buff, size_t count, lo
 	res = copy_from_user(rules, buff, count);
 	
 	if (res){
-			kfree(rules);
-			 return -EFAULT;
+		//copy from user failed
+		kfree(rules);
+		return -EFAULT;
 	}
-	printk(KERN_INFO "COPIED RULES FROM USER\n");
 
+	//null terminate after the flag so you can read the flag.
 	flag[1] = '\0';
 	strncpy(flag, rules, 1);
-	printk(KERN_INFO "FLAG : %s \n", flag);
-
 	if(strncmp(flag, "W", 2) == 0){
 		printk(KERN_INFO "WRITING RULES\n");
 		tmprules = kmalloc(count, GFP_KERNEL);
@@ -108,12 +109,12 @@ ssize_t fire_write( struct file *filp, const char __user *buff, size_t count, lo
 			return -ENOMEM;
 		}
 		if(count > 2){
-			printk(KERN_INFO "ADDING RULES\n");
+			//advance pointer to data secton of buffer
 			strncpy(tmprules, rules+2, count);
 			tmpList = create_klist();
 			setRules(tmprules, tmpList);
 
-			//crit write section
+			//critical write section
 			down_write(&rw_sem);
 			tmp2List = firewallRules;
 			firewallRules = tmpList;
@@ -122,18 +123,21 @@ ssize_t fire_write( struct file *filp, const char __user *buff, size_t count, lo
 			free_klist(tmp2List);
 
 		}else{
-			printk(KERN_INFO "RESETTING RULES\n");
-			up_write(&rw_sem);
+			//if given a blank rules file reset the rules
+			down_write(&rw_sem);
 			tmpList = create_klist();
 			tmp2List = firewallRules;
 			firewallRules = tmpList;
 			free_klist(tmp2List);
-			down_write(&rw_sem);
+			up_write(&rw_sem);
 		}
 
 		
 	}else if(strncmp(flag, "L", 2 ) == 0){
+		//print the contents of the rules list
+		down_read(&rw_sem);
 		printKlist(firewallRules);
+		up_read(&rw_sem);
 	}
 
 	kfree(rules);
@@ -228,13 +232,6 @@ unsigned int FirewallExtensionHook (const struct nf_hook_ops *ops,
 	
 	up_read(&rw_sem);
 	kfree(procName);
-	/*if (ntohs (tcp->dest) == 80) {
-		
-		printk(KERN_INFO "the proccess sending this packet is : %s\n", procName);
-	    tcp_done (sk); // terminate connection immediately 
-	    printk (KERN_INFO "Connection shut down\n");
-	    return NF_DROP;
-	}*/
     }
     return NF_ACCEPT;	
 }
@@ -253,13 +250,11 @@ static struct nf_hook_ops firewallExtension_ops = {
 int init_module(void)
 {
 	int errno;
-	//char firefox[256] = "/usr/lib/firefox/firefox";
 	firewallRules = create_klist();
 	if(firewallRules == NULL){
 		printk(KERN_INFO "was not able to create the rules list.\n");
 		return -ENOMEM;
 	}
-	//add_message(443,firefox, 256, firewallRules);
 
 	printk(KERN_INFO "rules list created\n");
 	
@@ -279,9 +274,14 @@ int init_module(void)
 
 void cleanup_module(void)
 {
+	down_write(&rw_sem);
 	free_klist(firewallRules);
-	remove_proc_entry(PROC_ENTRY_FILENAME, NULL);
 	nf_unregister_hook (&firewallExtension_ops); /* restore everything to normal */
+	up_write(&rw_sem);
+	
+	
+	remove_proc_entry(PROC_ENTRY_FILENAME, NULL);
+	
 	printk(KERN_INFO "Firewall extensions module unloaded\n");
 }
 
