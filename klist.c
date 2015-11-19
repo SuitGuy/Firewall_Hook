@@ -109,7 +109,16 @@ void free_klist(Klist * lst){
 	return;
 }
 
-
+int setRules(char * tmprules, Klist * lst){
+	int res;
+	int curport;
+	char filepath[512];
+	res = sscanf(tmprules, "%i %1024s", &curport, filepath);
+	while(res == 2){
+		add_message( curport, filepath, 512, lst);
+	}
+	return 0;
+}
 void printKlist(Klist * lst){
 	Node * cur = lst->p_head;
 	printk(KERN_INFO "Listing the Rules");

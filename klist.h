@@ -21,6 +21,8 @@ typedef struct Klist {
 //prints the list to the kernel output
 void printKlist(Klist * lst);
 
+//sets all the rules in a list based on the string of <port> <program>
+int setRules(char * tmprules, Klist * lst);
 
 //returns a pointer to an initalised list.
 Klist* create_klist(void);

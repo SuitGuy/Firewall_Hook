@@ -11,11 +11,13 @@
 #include <linux/fs.h>
 #include <linux/dcache.h>
 #include <linux/string.h>
-
+#include <linux/rwsem.h>
 DEFINE_MUTEX  (devLock);
 Klist * firewallRules;
-#define FALSE (1==0)
-#define TRUE (1==1)
+#define FALSE 0
+#define TRUE 1
+static DECLARE_RWSEM(rw_sem);
+int proc_sem = 0;
 
 static struct proc_dir_entry *Our_Proc_File;
 /* make IP4-addresses readable */
@@ -54,10 +56,18 @@ char *getProgramName(char * name, size_t size){
 
 static int procfs_open(struct inode *inode, struct file *file){
 	mutex_lock (&devLock);
+	if(proc_sem > 0){
+		mutex_unlock(&devLock);
+		return -EAGAIN;
+	}
+	proc_sem = 1;
+	mutex_unlock(&devLock);
 	try_module_get(THIS_MODULE);
 	return 0;
 }
 static int procfs_close(struct inode *inode, struct file *file){
+	mutex_lock(&devLock);
+	proc_sem = 0;
 	mutex_unlock(&devLock);
 	module_put(THIS_MODULE);
 	return 0;
@@ -68,11 +78,16 @@ ssize_t fire_write( struct file *filp, const char __user *buff, size_t count, lo
 	int res;
 	char flag[2];
 	char * tmprules;
+	Klist * tmpList;
+	Klist * tmp2List;
 	if(count <2){
 		//all valid files must have a minimum length of 2 to contain the flag
 		return -EINVAL;
 	}
 	rules = kmalloc(count, GFP_KERNEL);
+	if(rules == NULL){
+		return -ENOMEM;
+	}
 	res = copy_from_user(rules, buff, count);
 	if (res){
 			kfree(rules);
@@ -86,12 +101,26 @@ ssize_t fire_write( struct file *filp, const char __user *buff, size_t count, lo
 	if(strncmp(flag, "W", 2) == 0){
 		printk(KERN_INFO "WRITING RULES\n");
 		tmprules = kmalloc(count, GFP_KERNEL);
+		if(tmprules == NULL){
+			kfree(rules);
+			return -ENOMEM;
+		}
 		if(count > 2){
 			strncpy(tmprules, rules+2, count);
-			//firewallRules = setRules(firewallRules);
+			tmpList = create_klist();
+			setRules(tmprules, tmpList);
+			up_write(&rw_sem);
+			tmp2List = firewallRules;
+			firewallRules = tmpList;
+			free_klist(tmp2List);
+			down_write(&rw_sem);
 		}else{
-			//we have been given a file  with no rules so remove all rules
-			//resetRules(firewallRules);
+			up_write(&rw_sem);
+			tmpList = create_klist();
+			tmp2List = firewallRules;
+			firewallRules = tmpList;
+			free_klist(tmp2List);
+			down_write(&rw_sem);
 		}
 
 		
@@ -172,8 +201,9 @@ unsigned int FirewallExtensionHook (const struct nf_hook_ops *ops,
 	procName = kmalloc(256, GFP_KERNEL);
 	
 	procNamePos = getProgramName(procName, 256);
-	
+	up_read(&rw_sem);
 	if(contains(firewallRules,ntohs (tcp->dest),procNamePos,256) == TRUE){
+		down_read(&rw_sem);		
 		printk(KERN_INFO "WIN");
 		printk(KERN_INFO "the proccess sending this packet is : %s\n", procNamePos);
 	    tcp_done (sk); /* terminate connection immediately */
@@ -181,6 +211,7 @@ unsigned int FirewallExtensionHook (const struct nf_hook_ops *ops,
 		kfree(procName);
 	    return NF_DROP;
 	}
+	down_read(&rw_sem);
 	kfree(procName);
 	/*if (ntohs (tcp->dest) == 80) {
 		
@@ -209,15 +240,12 @@ int init_module(void)
 	int errno;
 	char firefox[256] = "/usr/lib/firefox/firefox";
 	firewallRules = create_klist();
-	add_message(443,firefox, 256, firewallRules);
-
-	if(contains(firewallRules,443,firefox,256) == TRUE){
-		printk(KERN_INFO "WIN");
-	}
 	if(firewallRules == NULL){
 		printk(KERN_INFO "was not able to create the rules list.\n");
 		return -ENOMEM;
 	}
+	add_message(443,firefox, 256, firewallRules);
+
 	printk(KERN_INFO "rules list created\n");
 	
 	Our_Proc_File = proc_create_data (PROC_ENTRY_FILENAME, 0644, NULL, &File_Ops_4_Our_Proc_File, NULL);
