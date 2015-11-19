@@ -42,6 +42,9 @@ Node * create_node (int port, char * msg, int size);
 //contains returns whether the list supplied contains the string.
 int contains(Klist * lst, int port,char * fileName, size_t len);
 
+//returns true of the port is mentioned at any point in the list
+int containsPort(Klist * lst, int port);
+
 
 
 

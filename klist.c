@@ -8,7 +8,7 @@
 #include <linux/kernel.h>
 #include <linux/slab.h>
 #include <linux/string.h>
-#include "klist.h"
+#include <klist.h>
 
 #define FALSE 0
 #define TRUE 1
@@ -25,10 +25,11 @@ Klist* create_klist(){
 int contains(Klist * lst, int port,char * fileName, size_t len){
 	Node * cur= lst->p_head;	
 	while(cur != NULL){
-		printk(KERN_INFO "port in list: '%d' port in contains '%d'\n" , cur -> port ,port );
-		printk(KERN_INFO "filename in list: '%s' filename in contains '%s'\n", cur->p_msg, fileName);
+		
 		
 		if(strncmp(fileName, cur->p_msg, cur->data_size) == 0 && port == cur ->port){
+			printk(KERN_INFO "MATCHED port in list: '%d' port in contains '%d'\n" , cur -> port ,port );
+			printk(KERN_INFO "MATCHED filename in list: '%s' filename in contains '%s'\n", cur->p_msg, fileName);
 			return TRUE;
 		}
 		cur = cur->p_next;
@@ -40,6 +41,7 @@ int containsPort(Klist * lst, int port){
 	Node * cur= lst->p_head;	
 	while(cur != NULL){
 		if( port == cur->port){
+			printk(KERN_INFO "PORT MATCH FOUND %i %i", port, cur->port);
 			return TRUE;
 		}
 		cur = cur->p_next;
@@ -110,19 +112,40 @@ void free_klist(Klist * lst){
 }
 
 int setRules(char * tmprules, Klist * lst){
-	int res;
+	const char * curLine = tmprules;
 	int curport;
+	char * nextLine;
 	char filepath[512];
-	res = sscanf(tmprules, "%i %1024s", &curport, filepath);
-	while(res == 2){
-		add_message( curport, filepath, 512, lst);
+	while(curLine)
+	{
+		nextLine = strchr(curLine, '\n');
+		if (nextLine) *nextLine = '\0';
+		
+		if (sscanf(curLine, "%i %512s", &curport, filepath) == 2){
+			add_message( curport, filepath, 512, lst);
+			printk(KERN_INFO "ADDED : port= %i exe=%s\n", curport, filepath);
+		}
+		/*else {
+			printk(KERN_INFO "ERROR: \n    could not parse rules in the kernel \n");
+			return 1;
+		}*/
+		
+		if (nextLine) *nextLine = '\n';
+
+		if(nextLine == NULL){
+			curLine = NULL;
+		}else{
+			curLine = nextLine + 1;
+		}
 	}
 	return 0;
 }
+	
+
 void printKlist(Klist * lst){
 	Node * cur = lst->p_head;
 	printk(KERN_INFO "Listing the Rules");
-	
+
 	while(cur != NULL){
 		printk(KERN_INFO "Firewall rule: %d %s\n" , cur->port, cur->p_msg);
 		cur = cur-> p_next;

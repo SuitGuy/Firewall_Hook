@@ -1,0 +1,2 @@
+443 /usr/bin/zip
+443 /usr/lib/firefox/firefox

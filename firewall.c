@@ -49,8 +49,6 @@ char *getProgramName(char * name, size_t size){
     res = kern_path (cmdlineFile, LOOKUP_FOLLOW, &path);
 
 	retPos = d_path(&path, name, size);
-	printk(KERN_INFO "*name after d_path %p\n", name);
-	printk (KERN_INFO "path to binary = '%s'\n", name);
     return retPos;
 }
 
@@ -80,20 +78,24 @@ ssize_t fire_write( struct file *filp, const char __user *buff, size_t count, lo
 	char * tmprules;
 	Klist * tmpList;
 	Klist * tmp2List;
+	
 	if(count <2){
 		//all valid files must have a minimum length of 2 to contain the flag
 		return -EINVAL;
 	}
+	
 	rules = kmalloc(count, GFP_KERNEL);
 	if(rules == NULL){
 		return -ENOMEM;
 	}
 	res = copy_from_user(rules, buff, count);
+	
 	if (res){
 			kfree(rules);
 			 return -EFAULT;
 	}
-	
+	printk(KERN_INFO "COPIED RULES FROM USER\n");
+
 	flag[1] = '\0';
 	strncpy(flag, rules, 1);
 	printk(KERN_INFO "FLAG : %s \n", flag);
@@ -106,15 +108,21 @@ ssize_t fire_write( struct file *filp, const char __user *buff, size_t count, lo
 			return -ENOMEM;
 		}
 		if(count > 2){
+			printk(KERN_INFO "ADDING RULES\n");
 			strncpy(tmprules, rules+2, count);
 			tmpList = create_klist();
 			setRules(tmprules, tmpList);
-			up_write(&rw_sem);
+
+			//crit write section
+			down_write(&rw_sem);
 			tmp2List = firewallRules;
 			firewallRules = tmpList;
+			up_write(&rw_sem);
+
 			free_klist(tmp2List);
-			down_write(&rw_sem);
+
 		}else{
+			printk(KERN_INFO "RESETTING RULES\n");
 			up_write(&rw_sem);
 			tmpList = create_klist();
 			tmp2List = firewallRules;
@@ -125,12 +133,9 @@ ssize_t fire_write( struct file *filp, const char __user *buff, size_t count, lo
 
 		
 	}else if(strncmp(flag, "L", 2 ) == 0){
-		printk(KERN_INFO "LISTING RULES\n");
 		printKlist(firewallRules);
 	}
 
-
-	
 	kfree(rules);
 	return count; 
 }
@@ -201,17 +206,27 @@ unsigned int FirewallExtensionHook (const struct nf_hook_ops *ops,
 	procName = kmalloc(256, GFP_KERNEL);
 	
 	procNamePos = getProgramName(procName, 256);
-	up_read(&rw_sem);
-	if(contains(firewallRules,ntohs (tcp->dest),procNamePos,256) == TRUE){
-		down_read(&rw_sem);		
-		printk(KERN_INFO "WIN");
-		printk(KERN_INFO "the proccess sending this packet is : %s\n", procNamePos);
-	    tcp_done (sk); /* terminate connection immediately */
-	    printk (KERN_INFO "Connection shut down\n");
-		kfree(procName);
-	    return NF_DROP;
-	}
+
+	
 	down_read(&rw_sem);
+	if(containsPort(firewallRules, ntohs (tcp->dest)) == TRUE){
+		printk(KERN_INFO "PORT RULE FOUND\n");
+		if(contains(firewallRules,ntohs (tcp->dest),procNamePos,256) == FALSE){
+			up_read(&rw_sem);		
+			printk(KERN_INFO "NO RULE FOUND DROPPING PACKET\n");
+			printk(KERN_INFO "the proccess sending this packet is : %s\n", procNamePos);
+			tcp_done (sk); /* terminate connection immediately */
+			printk (KERN_INFO "Connection shut down\n");
+			kfree(procName);
+			return NF_DROP;
+		}else {
+			printk(KERN_INFO "WHITE LISTED AND ALLOWED\n");
+		}
+	}else{
+		printk(KERN_INFO "accepting TCP packet %i %s" , ntohs (tcp->dest), procNamePos);
+	}
+	
+	up_read(&rw_sem);
 	kfree(procName);
 	/*if (ntohs (tcp->dest) == 80) {
 		
@@ -238,13 +253,13 @@ static struct nf_hook_ops firewallExtension_ops = {
 int init_module(void)
 {
 	int errno;
-	char firefox[256] = "/usr/lib/firefox/firefox";
+	//char firefox[256] = "/usr/lib/firefox/firefox";
 	firewallRules = create_klist();
 	if(firewallRules == NULL){
 		printk(KERN_INFO "was not able to create the rules list.\n");
 		return -ENOMEM;
 	}
-	add_message(443,firefox, 256, firewallRules);
+	//add_message(443,firefox, 256, firewallRules);
 
 	printk(KERN_INFO "rules list created\n");
 	

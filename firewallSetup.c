@@ -104,10 +104,11 @@ int readFile(char * filePath)
 		
 		if(!executable(filepath)){
 			fprintf(stderr,"ERROR: Cannot execute file\n");
+			exit(1);
 		}
 	}
 	fclose(fp);
-   
+	
 	return 0;
 }
 
