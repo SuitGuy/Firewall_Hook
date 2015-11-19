@@ -10,8 +10,8 @@
 #include <linux/string.h>
 #include "klist.h"
 
-#define FALSE (1==0)
-#define TRUE (1==1)
+#define FALSE 0
+#define TRUE 1
 /*returns a pointer to an initalised list.*/
 Klist* create_klist(){
 
@@ -29,6 +29,17 @@ int contains(Klist * lst, int port,char * fileName, size_t len){
 		printk(KERN_INFO "filename in list: '%s' filename in contains '%s'\n", cur->p_msg, fileName);
 		
 		if(strncmp(fileName, cur->p_msg, cur->data_size) == 0 && port == cur ->port){
+			return TRUE;
+		}
+		cur = cur->p_next;
+	}
+	return FALSE;
+}
+
+int containsPort(Klist * lst, int port){
+	Node * cur= lst->p_head;	
+	while(cur != NULL){
+		if( port == cur->port){
 			return TRUE;
 		}
 		cur = cur->p_next;
@@ -98,12 +109,13 @@ void free_klist(Klist * lst){
 	return;
 }
 
+
 void printKlist(Klist * lst){
 	Node * cur = lst->p_head;
 	printk(KERN_INFO "Listing the Rules");
 	
 	while(cur != NULL){
-		printk(KERN_INFO "Program: %s  Port: %d" , cur->p_msg, cur->port);
+		printk(KERN_INFO "Firewall rule: %d %s\n" , cur->port, cur->p_msg);
 		cur = cur-> p_next;
 	}
 }

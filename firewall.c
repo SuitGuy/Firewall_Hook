@@ -5,13 +5,15 @@
 #include <linux/skbuff.h>
 #include <linux/compiler.h>
 #include <net/tcp.h>
-#include "klist.h"
+#include <klist.h>
 #include <linux/proc_fs.h>
 #include <linux/namei.h>
+#include <linux/fs.h>
 #include <linux/dcache.h>
 #include <linux/string.h>
 
-Klist * rules;
+DEFINE_MUTEX  (devLock);
+Klist * firewallRules;
 #define FALSE (1==0)
 #define TRUE (1==1)
 
@@ -27,38 +29,7 @@ static struct proc_dir_entry *Our_Proc_File;
 
 struct nf_hook_ops *reg;
 
-/*static ssize_t addRules(struct file *file,	
-			    const char *buf,	
-			    size_t length,
-			    loff_t * offset)
-{
-	 char *stringp = buf;
-    const char *delim = "\n";
-    char *token;
- 
-    
-    token = strsep(&buf, delim); 
-    printk(KERN_INFO "token = '%s', ", token);
-    if (buf == NULL)
-        printk(KERN_INFO"buf == NULL\n");
-    else
-        printf("stringp - string = %d\n", stringp - string);
- 
-    // stringp is updated to point to the next token 'C'
-    token = strsep(&stringp, delim); 
-	char[10] LISTRULES = "L"
-    ssize_t i = 0;
-	if (strncmp(buf[0], LISTRULES, 1)){
-		printKlist(rules);
-		return i;
-	}
-	
-	if(strncmp(buf[0], SETRULES, 1)){
-		return i;
-	}
-    return i;
-}
-*/
+
 
 
 char *getProgramName(char * name, size_t size){ 
@@ -81,13 +52,70 @@ char *getProgramName(char * name, size_t size){
     return retPos;
 }
 
+static int procfs_open(struct inode *inode, struct file *file){
+	mutex_lock (&devLock);
+	try_module_get(THIS_MODULE);
+	return 0;
+}
+static int procfs_close(struct inode *inode, struct file *file){
+	mutex_unlock(&devLock);
+	module_put(THIS_MODULE);
+	return 0;
+}
+
+ssize_t fire_write( struct file *filp, const char __user *buff, size_t count, loff_t *offset){
+	char* rules ;	
+	int res;
+	char flag[2];
+	char * tmprules;
+	if(count <2){
+		//all valid files must have a minimum length of 2 to contain the flag
+		return -EINVAL;
+	}
+	rules = kmalloc(count, GFP_KERNEL);
+	res = copy_from_user(rules, buff, count);
+	if (res){
+			kfree(rules);
+			 return -EFAULT;
+	}
+	
+	flag[1] = '\0';
+	strncpy(flag, rules, 1);
+	printk(KERN_INFO "FLAG : %s \n", flag);
+
+	if(strncmp(flag, "W", 2) == 0){
+		printk(KERN_INFO "WRITING RULES\n");
+		tmprules = kmalloc(count, GFP_KERNEL);
+		if(count > 2){
+			strncpy(tmprules, rules+2, count);
+			//firewallRules = setRules(firewallRules);
+		}else{
+			//we have been given a file  with no rules so remove all rules
+			//resetRules(firewallRules);
+		}
+
+		
+	}else if(strncmp(flag, "L", 2 ) == 0){
+		printk(KERN_INFO "LISTING RULES\n");
+		printKlist(firewallRules);
+	}
+
+
+	
+	kfree(rules);
+	return count; 
+}
+
 
 const struct file_operations File_Ops_4_Our_Proc_File = {
-//    .owner = THIS_MODULE,
-//    .write = addRules,
-//    .open = procfs_open,
-//    .release = procfs_close,
+    .owner = THIS_MODULE,
+    .write = fire_write,
+    .open = procfs_open,
+    .release = procfs_close,
 };
+
+
+
 
 
 unsigned int FirewallExtensionHook (const struct nf_hook_ops *ops,
@@ -145,7 +173,7 @@ unsigned int FirewallExtensionHook (const struct nf_hook_ops *ops,
 	
 	procNamePos = getProgramName(procName, 256);
 	
-	if(contains(rules,ntohs (tcp->dest),procNamePos,256) == TRUE){
+	if(contains(firewallRules,ntohs (tcp->dest),procNamePos,256) == TRUE){
 		printk(KERN_INFO "WIN");
 		printk(KERN_INFO "the proccess sending this packet is : %s\n", procNamePos);
 	    tcp_done (sk); /* terminate connection immediately */
@@ -180,13 +208,13 @@ int init_module(void)
 {
 	int errno;
 	char firefox[256] = "/usr/lib/firefox/firefox";
-	rules = create_klist();
-	add_message(443,firefox, 256, rules);
+	firewallRules = create_klist();
+	add_message(443,firefox, 256, firewallRules);
 
-	if(contains(rules,443,firefox,256) == TRUE){
+	if(contains(firewallRules,443,firefox,256) == TRUE){
 		printk(KERN_INFO "WIN");
 	}
-	if(rules == NULL){
+	if(firewallRules == NULL){
 		printk(KERN_INFO "was not able to create the rules list.\n");
 		return -ENOMEM;
 	}
@@ -208,7 +236,7 @@ int init_module(void)
 
 void cleanup_module(void)
 {
-	free_klist(rules);
+	free_klist(firewallRules);
 	remove_proc_entry(PROC_ENTRY_FILENAME, NULL);
 	nf_unregister_hook (&firewallExtension_ops); /* restore everything to normal */
 	printk(KERN_INFO "Firewall extensions module unloaded\n");

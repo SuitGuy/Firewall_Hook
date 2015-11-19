@@ -7,10 +7,11 @@
 
 int sendFile(char * filepath){
 	FILE *fp = fopen(filepath, "r");
+	long filesize;
 	char * content = NULL;
 	if(fp != NULL){
 		if(fseek(fp, 0L, SEEK_END) == 0){
-			long filesize = ftell(fp);
+			filesize = ftell(fp);
 			if(filesize != -1){
 				content = malloc(sizeof(char) * (filesize +1));
 			}
@@ -28,8 +29,25 @@ int sendFile(char * filepath){
 		fclose(fp);
 		return -1;
 	}
+	char * msg = malloc(sizeof(char) * (filesize +3));
+	strcat(msg, "W ");
+	strcat(msg, content);
+	printf("FILE CONTENT:\n%s\n", msg);
 
-	printf("FILE CONTENT: %s\n", content);
+
+	FILE * procfp;
+	procfp = fopen("/proc/firewallExtension", "w");
+	if(procfp == NULL){
+		fprintf(stderr,"ERROR: could not wrtie to /proc file\n");
+		fclose(fp);
+		exit(1);
+	}
+	fwrite(msg,(filesize +3), sizeof(char), procfp);
+	fclose(procfp);
+
+
+
+	free(content);
 	fclose(fp);
 	return 0;
 }
@@ -96,10 +114,17 @@ int readFile(char * filePath)
 int main (int argc, char **argv) {
     
 	char filepath[BUFFERSIZE];
-
+	FILE * procfp;
     
 	if(argc == 2 && strncmp(argv[1], "L", 2) == 0){
-		printf("WIN\n");
+		procfp = fopen("/proc/firewallExtension", "w");
+		if(procfp == NULL){
+			fprintf(stderr, "ERROR: could not write to /proc file\n");
+			exit(1);
+		}
+		fwrite("L ",3, sizeof(char), procfp);
+		fclose(procfp);
+
 	}else if(argc == 3 && strncmp(argv[1], "W", 2) == 0){
 		strncpy(filepath, argv[2], BUFFERSIZE -1);
 		filepath[BUFFERSIZE -1] = '\0';
